@@ -1,1 +1,17 @@
+# Python dirs and files
 .idea/
+__pycache__/
+
+# FFMPEG codecs
+*.dll
+
+# Data samples
+dataset_csvs/
+videos/
+results/
+projection_samples/
+preview_samples/
+
+# Other
+temp_onnx_dir/
+pretrained_models/

@@ -1,0 +1,196 @@
+# Define shared and the most important performance params here. Allows easier benchmarking
+define: &wavelet Haar # Haar_v2 # CDF-9/7 # [CDF-9/7, Haar, ...],
+define: &G_activation lrelu #  make Generator smoother
+define: &D_activation lrelu # save memory by using more simple activation [lrelu as for original SG]
+define: &D_conv_type selfmod # [base, selfmod, spectral]
+define: &conv_clamp 256
+define: &use_projection False
+define: &use_ffc True
+define: &use_diff_aug True
+define: &load_from_checkpoint True
+# Haar stats on FFHQ 1024x1024 (1e-5) 10k: [0.5, 18, 17, 37]
+# Element-wise multiply the following lists to get close values
+define: &init_rgb_conv_wavelet_scales null # [1, 4, 4, 6] # null to disable
+define: &init_affine_wavelet_scales [0.5, 12, 12, 16] # AUTO or list of 4 values
+define: &G_channel_base 32768 # SG2, SG3-T
+define: &D_channel_base 16384 # 16384 # SG2, SG3-T, SG3-R
+define: &resolution 1024
+
+
+# ----- Params -----
+
+config_name: FFHQ_v3
+
+general_params:
+  architecture: StyleWaveGAN # [stylewavegan, stylegan2, stylegan3-r, stylegan3-t]
+  # architecture: StyleGAN2
+  # architecture: StyleGAN3-T
+  # architecture: StyleGAN3-R
+  # Dataset output params
+  img_shape_yxc: [*resolution, *resolution, 3]
+  # Network params
+  start_resolution: 8
+  target_resolution: *resolution
+  num_classes: 1
+  z_dim: 192 # SG2 - 512, SG3 - 512, SG-XL - 64 for ImageNet
+  w_dim: 512
+  num_fp16_res: 4
+  z_distribution: normal
+  # Double backward is not supported in PyTorch 2.5, so disable for GAN models used in loss
+  use_compilation: False
+  use_diff_aug: *use_diff_aug
+  load_from_checkpoint: *load_from_checkpoint
+
+dwt_params:
+  wavelet: *wavelet # null to disable usage of wavelets
+  use_affine: True
+  init_affine_scales: *init_affine_wavelet_scales
+  train_affine: True
+  affine_lr_multiplier: 0.02
+  train_kernel: False
+  scale_1d_coeffs: AUTO # True by default
+  scale_2d_coeffs: False # disable if affine transform is enabled, True by default
+  coeffs_scales_2d_version: Haar_FFHQ_v3 # 6 is the best for now
+
+ema_params:
+  mode: base # one of [base, v3]
+  sema_kimg: null # Smooth EMA interval, null to disable
+  # "base" params
+  kimg: 10
+  rampup: 0.05 # null to disable
+  # "v3" params
+  decay: 0.9999
+  min_decay: 0.0
+  use_warmup: False
+  warmup_gamma: 1.0
+  warmup_power: 0.67
+  foreach: True
+  exclude_buffers: False
+
+training_params:
+  total_kimg: 25000
+  batch_size_per_gpu: 16 # 24 (24 for CUDA, 16 for REF)
+  data_format: NCHW
+  # data_format: NHWC # slow down training for some reason and increases memory consumption a bit
+  # gpus: [0, 1]
+  gpus: null
+  use_custom_conv2d_op: True
+  upfirdn2d_impl: cuda # one of [cuda, ref, custom_grad]
+  bias_act_impl: cuda # one of [cuda, ref, custom_grad]
+
+dataset_params:
+  csv_path: ./dataset_csvs/FFHQ_v1.csv
+  horizontal_flip_p: 0.5
+  vertical_flip_p: -1
+
+dataloader_params:
+  use_fast_dataloader: False
+  num_workers: AUTO
+  pin_memory: True
+  prefetch_factor: null
+
+models_params:
+  Generator:
+    Mapping:
+      num_layers: 3
+      activation: *G_activation
+      # Depth reduced, activation updated, wavelets enabled, G reg loss fadein
+      lr_multiplier: 0.02 # SG - 0.01, SG2 - 0.01, SG3 - 0.01
+      w_avg_beta: 0.998
+    Synthesis:
+      # 1 - Input is a separate block
+      # 2 - Input is inside the 1st block
+      # 3 - Input is inside the 1st block and there is one additional block
+      input_impl_idx: 2 # [1, 2, 3]
+      input_type: Fourier # [Fourier, Const]
+      architecture: skip # [orig, skip, resnet], SG2- skip, SG3 - orig
+      channel_base: *G_channel_base
+      channel_max: 512
+      activation: *G_activation
+      conv_clamp: *conv_clamp
+      resample_filter: [1, 3, 3, 1]
+      init_torgb_wavelet_scales: *init_rgb_conv_wavelet_scales
+      fused_modconv_default: True
+  Discriminator:
+    architecture: resnet # [orig, skip, resnet], SG2- resnet, SG3 - resnet, SWAGAN - skip
+    channel_base: *D_channel_base
+    channel_max: 512
+    activation: *D_activation
+    conv_clamp: *conv_clamp
+    resample_filter: [1, 3, 3, 1]
+    conv_type: *D_conv_type
+    init_fromrgb_wavelet_scales: *init_rgb_conv_wavelet_scales
+    ffc_params:
+      use_ffc: *use_ffc
+      # 1 - apply normalization with activation to output of each branch
+      # 2 - apply normalization and activation inside blocks of each branch
+      impl_idx: 2
+      num_skipped_res: 1 # how many downsampling blocks to skip
+      ratio_in_global: 0.25
+      ratio_out_global: 0.25
+      fft_norm: full
+      use_lfu: True
+      lfu_mode: wavelet_full # [base, conv, wavelet_lite, wavelet_full]
+      lfu_wavelet: *wavelet
+      conv_type: *D_conv_type
+      activation: *D_activation
+      conv_norm: null
+      conv_clamp: *conv_clamp
+    projection_params:
+      use_projection: *use_projection
+      num_heads: 3 # number of Discriminator heads
+      mixing_out_max_channels: null # null to use original layer number of channels
+      head_architecture: swg-v2 # [sg2, sg-t, swg, swg-v2]
+      head_main_channels: null # null to use input number of channels
+
+loss_params:
+  G_reg_interval: 4 # SG2 - 4, SG3 - null
+  D_reg_interval: 16 # SG2 - 16
+  r1_gamma: 10
+  style_mixing_prob: 0.75 # SG2 - 0.9, SG3 - 0
+  pl_weight: 2 # SG2 - 2, SG3 - 0
+  pl_batch_shrink: 2
+  pl_decay: 0.01
+  pl_no_weight_grad: True # False, SG2 - False, SG3 - False
+  blur_init_sigma: 10 # SG2 - 0, SG3 - 10, 4.5 from ckpt
+  blur_fade_kimg: 200 # SG2 - 0, SG3 - 200,
+  G_reg_fade_kimg: 200 # 500, SG-XL - 200, disable regularization term for this number of images
+  use_projection: *use_projection
+  use_clip_loss: False
+  clip_weight: 0.05
+
+optimizers_params:
+  Generator:
+    type: adam
+    lr: 0.002
+    eps: 1e-8
+    betas: [0.0, 0.99] # arg for Adam optimizer
+  Discriminator:
+    type: adam
+    lr: 0.002
+    eps: 1e-8
+    betas: [0.0, 0.99] # arg for Adam optimizer
+
+metrics_params:
+  metric1:
+    type: FID
+    kimg: 70 # 70k images for FFHQ
+    data_format: NHWC
+    # No padding is needed for FFHQ, so just use resize instead of M transform
+    resize_in_model: True
+    resize_method: linear
+    batch_size: 32
+  metric2:
+    type: PPL
+    kimg: 50
+    skip: True
+
+logs_params:
+  dir: ./results
+  logs_freq_kimg: 5
+  imgs_freq_kimg: 10
+  ckpts_freq_kimg: 10
+  metrics_freq_kimg: 100
+  imgs_grid_ncols: 6
+  imgs_grid_nrows: 4
+  max_ckpts: 5
