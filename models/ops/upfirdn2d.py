@@ -26,17 +26,17 @@ _plugin = None
 # Help:
 # 1. pip install ninja
 # 2. conda install cuda-nvcc -c nvidia (thanks to https://github.com/conda/conda/issues/7757 by iyume)
-# 3. export CFLAGS="-I/home/user/miniconda3/envs/torch-2.6/lib/python3.10/site-packages/nvidia/cuda_runtime/include $CFLAGS"
+# 3. export CFLAGS="-I/home/user/miniconda3/envs/torch-2.6/lib/python3.10/site-packages.txt/nvidia/cuda_runtime/include $CFLAGS"
 
 """
 Help:
 export CUDA_HOME="/home/user/miniconda3/envs/torch-2.6" (which nvcc)
  locate cuda_runtime_api.h
  
- /home/user/miniconda3/envs/torch-2.6/lib/python3.10/site-packages/torch/include/ATen/cuda/CUDAContextLight.h:6:10:
+ /home/user/miniconda3/envs/torch-2.6/lib/python3.10/site-packages.txt/torch/include/ATen/cuda/CUDAContextLight.h:6:10:
 
 
-/home/user/miniconda3/envs/torch-2.6/lib/python3.10/site-packages/nvidia/cuda_cupti/lib
+/home/user/miniconda3/envs/torch-2.6/lib/python3.10/site-packages.txt/nvidia/cuda_cupti/lib
 
 export CUDA_TOOLKIT_ROOT_DIR=$CUDA_HOME
 export LD_LIBRARY_PATH="$CUDA_HOME/extras/CUPTI/lib64:$LD_LIBRARY_PATH"

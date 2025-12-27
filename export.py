@@ -7,6 +7,7 @@ import torch
 
 from models.networks import build_G_model
 
+
 def export_to_onnx(G_model, gen_z, gen_c, config, onnx_model_path):
     print(f'Exporting ONNX model to {onnx_model_path}...')
     # 2. Set params
@@ -59,5 +60,5 @@ def export_to_onnx(G_model, gen_z, gen_c, config, onnx_model_path):
         assert check_status, 'Simplified model could not be validated'
         onnx.save(simplified_onnx_model, onnx_model_path)
         print(f'Simplified ONNX model: {onnx_model_path}')
-    # return status if eveyting is fine
+    # return status if eve is fine
     return True
