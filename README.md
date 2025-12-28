@@ -14,13 +14,13 @@ Overall design (FFHQ config as a reference):
 
 
 Generator architecture:
-![G_model](figures/G_model.png)
+![G_model](figures/WaveStyleGAN_G.png)
 
 Discriminator architecture:
-![D_model](figures/D_model.png)
+![D_model](figures/WaveStyleGAN_D.png)
 
 Updated FFCv2 block:
-![FFC](figures/FFCv2.png)
+![FFC](figures/WaveStyleGAN_FFCv2.png)
 
 
 ## Generated samples
